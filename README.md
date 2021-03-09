@@ -1,4 +1,4 @@
-# purity estiamtor
+# purity estimator
 
 ## Installation
 
