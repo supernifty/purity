@@ -251,7 +251,7 @@ def main(samples, dp_threshold, target, info_af, log, filter, just_pass, use_lik
     logging.debug('adding %s', vaf)
     if 'color' in vaf and vaf['color'] is not None:
       color=vaf['color']
-    elif gene_colors is None or gene not in vaf:
+    elif gene_colors is None or 'gene' not in vaf:
       color='#800000'
     else: # look up color based on gene
       for gc in gene_colors:
