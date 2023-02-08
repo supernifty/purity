@@ -30,7 +30,7 @@ AF_COLORS=['#92b3eb', '#8293ab', '#83e063', '#63a033']
 
 colors = {"SBS1": "#de3860", "SBS2": "#41ac2f", "SBS3": "#7951d0", "SBS4": "#73d053", "SBS5": "#b969e9", "SBS6": "#91ba2c", "SBS7a": "#b4b42f", "SBS7b": "#5276ec", "SBS7c": "#daae36", "SBS7d": "#9e40b5", "SBS8": "#43c673", "SBS9": "#dd4cb0", "SBS10a": "#3d9332", "SBS10b": "#de77dd", "SBS11": "#7bad47", "SBS12": "#9479e8", "SBS13": "#487b21", "SBS14": "#a83292", "SBS15": "#83c67d", "SBS16": "#664db1", "SBS17a": "#e18d28", "SBS17b": "#588de5", "SBS18": "#e2672a", "SBS19": "#34c7dd", "SBS20": "#cf402b", "SBS21": "#5acdaf", "SBS22": "#d74587", "SBS23": "#428647", "SBS24": "#7b51a7", "SBS25": "#b4ba64", "SBS26": "#646cc1", "SBS27": "#a27f1f", "SBS28": "#3b63ac", "SBS29": "#dca653", "SBS30": "#505099", "SBS31": "#7d8529", "SBS32": "#bf8ade", "SBS33": "#516615", "SBS34": "#b65da7", "SBS35": "#57a87a", "SBS36": "#c84249", "SBS37": "#37b5b1", "SBS38": "#a14622", "SBS39": "#58b5e1", "SBS40": "#ba6e2f", "SBS41": "#589ed8", "SBS42": "#e98261", "SBS43": "#3176ae", "SBS44": "#656413", "SBS45": "#a19fe2", "SBS46": "#756121", "SBS47": "#7e4a8d", "SBS48": "#326a38", "SBS49": "#dd8abf", "SBS50": "#1a6447", "SBS51": "#e78492", "SBS52": "#30876c", "SBS53": "#9d4d7c", "SBS54": "#919d5b", "SBS55": "#9d70ac", "SBS56": "#5b6f34", "SBS57": "#65659c", "SBS58": "#c9a865", "SBS59": "#a1455d", "SBS60": "#5e622c", "SBS84": "#b66057", "SBS85": "#dca173", "DBS1": "#855524", "DBS2": "#9f7846", "DBS3": "#7951d0", "DBS4": "#73d053", "DBS5": "#b969e9", "DBS6": "#91ba2c", "DBS7": "#3656ca", "DBS8": "#b4b42f", "DBS9": "#5276ec", "DBS10": "#daae36", "DBS11": "#9e40b5", "ID1": "#de3860", "ID2": "#41ac2f", "ID3": "#7951d0", "ID4": "#73d053", "ID5": "#b969e9", "ID6": "#91ba2c", "ID7": "#9e40b5", "ID8": "#43c673", "ID9": "#dd4cb0", "ID10": "#3d9332", "ID11": "#de77dd", "ID12": "#7bad47", "ID13": "#9479e8", "ID14": "#487b21", "ID15": "#a83292", "ID16": "#83c67d", "ID17": "#664db1"}
 
-def main(samples, dp_threshold, target, info_af, log, filter, just_pass, use_likelihoods, percent, title, genes, consequences, vep_format, impacts, gene_colors, annotate, vcfs, vcf_names, width, height, annotate_graph):
+def main(samples, dp_threshold, target, info_af, log, filter, just_pass, use_likelihoods, percent, title, genes, consequences, vep_format, impacts, gene_colors, annotate, vcfs, vcf_names, width, height, annotate_graph, skip_vep, annotate_with_af, min_af, ypos_strategy='stagger'):
   logging.info('width, height = %i, %i', width, height)
   rcParams['figure.figsize'] = width, height
 
@@ -119,19 +119,25 @@ def main(samples, dp_threshold, target, info_af, log, filter, just_pass, use_lik
               value = alt / (ref + alt)
             else:
               value = 0
+
+      if value < min_af:
+        skipped_af += 1
+        continue
+
       target_ad.append(value) # overall set of afs
   
       # if this a variant of interest?
       if genes is not None and len(genes) > 0:
         # parse vep
-        veps = variant.INFO['CSQ'].split(',')
-        for vep in veps:
-          values = {x[0]: x[1] for x in zip(vep_format, vep.split('|'))}
-          #logging.debug('vep: %s', values)
-          if values['PICK'] == '1' and values['SYMBOL'] in genes and (consequences is None or values['Consequence'] in consequences) and (impacts is None or values['IMPACT'] in impacts):
-            logging.debug('interesting variant %s', variant)
-            vafs.append({'gene': values['SYMBOL'], 'HGVSc': values['HGVSc'], 'HGVSp': values['HGVSp'], 'vaf': value})
-            break
+        if not skip_vep:
+          veps = variant.INFO['CSQ'].split(',')
+          for vep in veps:
+            values = {x[0]: x[1] for x in zip(vep_format, vep.split('|'))}
+            #logging.debug('vep: %s', values)
+            if values['PICK'] == '1' and values['SYMBOL'] in genes and (consequences is None or values['Consequence'] in consequences) and (impacts is None or values['IMPACT'] in impacts):
+              logging.debug('interesting variant %s with vaf %.2f', variant, value)
+              vafs.append({'gene': values['SYMBOL'], 'HGVSc': values['HGVSc'], 'HGVSp': values['HGVSp'], 'vaf': value})
+              break
   
       allowed += 1
       if use_likelihoods:
@@ -164,7 +170,7 @@ def main(samples, dp_threshold, target, info_af, log, filter, just_pass, use_lik
 
   min_ads = min(all_ads)
   max_ads = max(all_ads)
-  logging.info('processed %i variants. no pass %i. low af %i. low dp %i. allowed %i AF range %.2f to %.2f', variant_count + 1, skipped_pass, skipped_af, skipped_af, allowed, min_ads, max_ads)
+  logging.info('processed %i variants. no pass %i. low af %i. low dp %i. allowed %i AF range %.2f to %.2f', variant_count + 1, skipped_pass, skipped_af, skipped_dp, allowed, min_ads, max_ads)
 
   if just_pass:
     xmax = max(pass_ads + [0.01])
@@ -233,6 +239,7 @@ def main(samples, dp_threshold, target, info_af, log, filter, just_pass, use_lik
         logging.warn('annotation %s did not contain @', a)
         continue
       message, vaf = a.split('@')
+      message = message.replace('_', ' ') # hack
       # vaf can have a color too
       if ':' in vaf:
         vaf, color = vaf.split(':')
@@ -243,6 +250,10 @@ def main(samples, dp_threshold, target, info_af, log, filter, just_pass, use_lik
         vafs.append({'custom': message, 'vaf': float(vaf)/100, 'color': color})
       else:
         vafs.append({'custom': message, 'vaf': float(vaf), 'color': color})
+
+      # assume a : signifies a gene
+      if ':' in message:
+        vafs[-1]['gene'] = message.split(':')[0]
 
   # vafs.append({'gene': values['SYMBOL'], 'HGVSp': values['HGVSp'], 'vaf': value})
   # sorted(list_to_be_sorted, key=lambda k: k['name']) 
@@ -259,23 +270,44 @@ def main(samples, dp_threshold, target, info_af, log, filter, just_pass, use_lik
         if g == vaf['gene']:
           color=c
           break
+
     if 'custom' in vaf:
-      plt.axvline(vaf['vaf'], 0, 1, color=color)
+      if 'gene' in vaf:
+        if vaf['gene'] not in labelled:
+          plt.axvline(vaf['vaf'], 0, 1, color=color, label=vaf['gene'])
+          labelled.add(vaf['gene'])
+          logging.info('adding gene %s', vaf['gene'])
+        else:
+          plt.axvline(vaf['vaf'], 0, 1, color=color)
+      else:
+        plt.axvline(vaf['vaf'], 0, 1, color=color)
+
     elif vaf['gene'] not in labelled:
       plt.axvline(vaf['vaf'], 0, 1, color=color, label=vaf['gene'])
       labelled.add(vaf['gene'])
+      logging.info('adding gene %s', vaf['gene'])
     else:
       plt.axvline(vaf['vaf'], 0, 1, color=color)
 
-    if log:
-      ypos = math.pow(i % 3 + 1, 10) * yh.max() / 1000000 + 2
-    else:
-      ypos = i % 4 / 4 * yh.max() + yh.max() * YSQUIGGEM 
+    if ypos_strategy == 'stagger':
+      if log:
+        ypos = math.pow(i % 3 + 1, 10) * yh.max() / 1000000 + 2
+      else:
+        ypos = i % 4 / 4 * yh.max() + yh.max() * YSQUIGGEM 
+      verticalalignment = 'baseline'
+    elif ypos_strategy == 'top':
+      ypos = yh.max()
+      verticalalignment = 'top'
+    elif ypos_strategy == 'bottom':
+      ypos = 0
+      verticalalignment = 'bottom'
 
     logging.debug('ypos %s', ypos)
     if 'custom' in vaf:
       annot = vaf['custom']
-      plt.text(float(vaf['vaf'])-SQUIGGEM * xmax, ypos, '{}'.format(annot), rotation=90, verticalalignment='baseline', fontsize='smaller', color='black')
+      if annotate_with_af:
+        annot = '{} ({}%)'.format(annot, int(100 * vaf['vaf']))
+      plt.text(float(vaf['vaf'])-SQUIGGEM * xmax, ypos, '{}'.format(annot), rotation=90, verticalalignment=verticalalignment, fontsize='smaller', color='black')
       continue
     elif ':' in vaf['HGVSp']:
       annot = vaf['HGVSp'].split(':')[1]
@@ -283,7 +315,9 @@ def main(samples, dp_threshold, target, info_af, log, filter, just_pass, use_lik
       annot = vaf['HGVSc'].split(':')[1]
     else:
       annot = ''
-    plt.text(float(vaf['vaf'])-SQUIGGEM * xmax, ypos, '{}:{} {}%'.format(vaf['gene'], annot, '{:.0f}'.format(vaf['vaf'] * 100)), rotation=90, verticalalignment='baseline', fontsize='smaller', color='black')
+    if annotate_with_af:
+      annot = '{} ({}%)'.format(annot, int(100 * vaf['vaf']))
+    plt.text(float(vaf['vaf'])-SQUIGGEM * xmax, ypos, '{}:{} {}%'.format(vaf['gene'], annot, '{:.0f}'.format(vaf['vaf'] * 100)), rotation=90, verticalalignment=verticalalignment, fontsize='smaller', color='black')
 
   if annotate_graph is not None:
     text_box = AnchoredText(annotate_graph, frameon=True, loc=4, pad=0.5)
@@ -305,6 +339,7 @@ if __name__ == '__main__':
   parser.add_argument('--target', required=True,  help='image output')
   parser.add_argument('--filter', required=False,  help='chromosome or chromosome:range')
   parser.add_argument('--dp', type=int, required=False, default=0, help='minimum dp')
+  parser.add_argument('--min_af', type=float, required=False, default=0, help='minimum af')
   parser.add_argument('--info_af', action='store_true', help='info af')
   parser.add_argument('--just_pass', action='store_true', help='only plot passes')
   parser.add_argument('--log', action='store_true', help='log on y scale')
@@ -317,10 +352,13 @@ if __name__ == '__main__':
   parser.add_argument('--vep_format', required=False, help='vep format')
   parser.add_argument('--annotate', nargs='*', required=False, help='custom annotation of the form annotation@af[:color]')
   parser.add_argument('--annotate_graph', required=False, help='text to place at bottom right')
+  parser.add_argument('--annotate_with_af', action='store_true', help='include af')
   parser.add_argument('--vcfs', required=False, nargs='+', help='vcfs to read')
   parser.add_argument('--vcf_names', required=False, nargs='+', help='vcfs names')
   parser.add_argument('--width', required=False, default=16, type=int, help='width')
   parser.add_argument('--height', required=False, default=12, type=int, help='width')
+  parser.add_argument('--skip_vep', action='store_true', help='do not look at vep')
+  parser.add_argument('--ypos_strategy', default='stagger', help='how to position the annotation stagger, top, or bottom')
   parser.add_argument('--verbose', action='store_true', help='more logging')
   args = parser.parse_args()
   if args.verbose:
@@ -329,4 +367,4 @@ if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.INFO)
 
   # sample af vcf
-  main(args.sample, args.dp, args.target, args.info_af, args.log, args.filter, args.just_pass, args.signature_likelihoods, args.percent, args.title, args.genes, args.consequences, args.vep_format, args.impacts, args.gene_colors, args.annotate, args.vcfs, args.vcf_names, args.width, args.height, args.annotate_graph)
+  main(args.sample, args.dp, args.target, args.info_af, args.log, args.filter, args.just_pass, args.signature_likelihoods, args.percent, args.title, args.genes, args.consequences, args.vep_format, args.impacts, args.gene_colors, args.annotate, args.vcfs, args.vcf_names, args.width, args.height, args.annotate_graph, args.skip_vep, args.annotate_with_af, args.min_af, args.ypos_strategy)
